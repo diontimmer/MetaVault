@@ -1,6 +1,6 @@
-# MetaVaultDatabase
+# MetaVault
 
-MetaVaultDatabase is a simple database for storing metadata associated with (media) files. This is a simple wrapper around sqlite3 which mimics the behavior of a Python dictionary. This is designed to provide an easy-to-use interface for managing metadata.
+MetaVault is a simple database for storing metadata associated with (media) files. This is a simple wrapper around sqlite3 which mimics the behavior of a Python dictionary. This is designed to provide an easy-to-use interface for managing metadata.
 I am fully aware that this is not the most efficient way to work with sqlite3, but it is a simple way to work with sqlite in an object-oriented way.
 
 ## Installation
@@ -17,7 +17,7 @@ pip install metavault
 from metavault import MetaVaultDatabase
 
 # connect to database
-database = MetaVaultDatabase('test.locker')
+database = MetaVaultDatabase('test.vault')
 
 # create dataset (or version of dataset)
 database.create_dataset('test')
