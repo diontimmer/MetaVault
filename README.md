@@ -50,7 +50,7 @@ print(dataset['ambient.mp3']) # {'title': 'Trashcore', 'artist': 'Dog The Bounty
 database.close()
 
 # or with context manager
-with MetaVaultDatabase('test.locker') as database:
+with MetaVaultDatabase('test.vault') as database:
     dataset = database['test']
     # export as various formats
     dataset.export('test.csv')
