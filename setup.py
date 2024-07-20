@@ -3,7 +3,6 @@ from setuptools import setup
 setup(
     name="MetaVault",
     version="0.1",
-    packages=[""],
     download_url="https://github.com/diontimmer/MetaVault/archive/refs/tags/v_0.1.tar.gz",
     license="MIT",
     author="Dion Timmer",
