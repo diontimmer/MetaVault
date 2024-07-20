@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="MetaVault",
-    version="0.1.0",
+    version="0.1",
     packages=[""],
     license="MIT",
     author="Dion Timmer",
@@ -11,4 +11,9 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     scripts=["metavault.py"],
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
 )
