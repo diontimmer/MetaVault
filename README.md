@@ -1,7 +1,8 @@
 # MetaVault
 
 MetaVault is a simple database for storing metadata associated with (media) files. This is a simple wrapper around sqlite3 which mimics the behavior of a Python dictionary. This is designed to provide an easy-to-use interface for managing metadata.
-I am fully aware that this is not the most efficient way to work with sqlite3, but it is a simple way to work with sqlite in an object-oriented way.
+
+If you are trying to write alot of data iteratively to the database, make sure to set manual_commit=True in the database initialization and db.commit() at the end of your loop. This will reduce the number of commits and increase the speed of writing data to the database.
 
 ## Installation
 
@@ -56,4 +57,13 @@ with MetaVaultDatabase('test.vault') as database:
     dataset.export('test.csv')
     dataset.export('test.json')
     dataset.export('test.jsonl')
+
+# write alot of data with manual commit to improve performance
+with MetaVaultDatabase('test.vault', manual_commit=True) as database:
+    dataset = database['test']
+    for data in datas:
+        dataset[data['filename']] = data
+
+    database.commit()
+
 ```
