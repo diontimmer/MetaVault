@@ -23,11 +23,11 @@ class MetaVaultDatabase:
     """
 
     def __init__(self, db_path, manual_commit=False):
-        self.db_path = db_path
-        self.manual_commit = manual_commit
-        self.conn = sqlite3.connect(db_path, timeout=5000)
+        super().__setattr__("db_path", db_path)
+        super().__setattr__("manual_commit", manual_commit)
+        super().__setattr__("conn", sqlite3.connect(db_path, timeout=5000))
         self.conn.row_factory = sqlite3.Row
-        self.cursor = self.conn.cursor()
+        super().__setattr__("cursor", self.conn.cursor())
 
     @property
     def datasets(self):
@@ -78,7 +78,9 @@ class MetaVaultDatabase:
             else:
                 self.remove_dataset(dataset_name)
 
-        self.create_dataset(dataset_name)
+        self.create_dataset(
+            dataset_name, attributes=list(dataset[list(dataset.keys())[0]].keys())
+        )
         self[dataset_name].batch_insert(dataset)
         self._checked_commit()
 
@@ -86,6 +88,27 @@ class MetaVaultDatabase:
         if table_name not in self.datasets:
             raise KeyError(f"Dataset '{table_name}' does not exist.")
         return DatasetWrapper(self, table_name)
+
+    def __delitem__(self, dataset_name):
+        self.remove_dataset(dataset_name)
+
+    def __contains__(self, dataset_name):
+        return dataset_name in self.datasets
+
+    def __getattribute__(self, name: str):
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            return self[name]
+
+    def __setattr__(self, name: str, value):
+        if name in list(self.__dict__.keys()):
+            super().__setattr__(name, value)
+        else:
+            self[name] = value
+
+    def __delattr__(self, name: str):
+        del self[name]
 
     def create_dataset(self, dataset_name: str, attributes: str = None):
         """
@@ -115,6 +138,18 @@ class MetaVaultDatabase:
         self.cursor.execute(f"DROP TABLE IF EXISTS {dataset_name}")
         self._checked_commit()
 
+    def get_dataset(self, dataset_name: str):
+        """
+        Get a dataset from the database.
+
+        Parameters:
+            dataset_name (str): The name of the dataset.
+
+        Returns:
+            DatasetWrapper: A wrapper around the dataset.
+        """
+        return DatasetWrapper(self, dataset_name)
+
     def close(self):
         self.conn.close()
 
@@ -123,6 +158,9 @@ class MetaVaultDatabase:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
+
+    def __len__(self):
+        return len(self.datasets)
 
 
 class MetadataDict:
@@ -143,10 +181,9 @@ class MetadataDict:
 
 
 class MetadataCollection:
-    def __init__(self, dataset, collection_dict=None, metadata_dicts=None):
-        self.dataset = dataset
+    def __init__(self, collection_dict=None, metadata_dicts=None):
         if collection_dict is None:
-            self.collection_dict = {}
+            super().__setattr__("collection_dict", {})
             if metadata_dicts is None:
                 raise ValueError(
                     "Either collection_dict or metadata_dicts must be provided."
@@ -154,7 +191,7 @@ class MetadataCollection:
             for metadata_dict in metadata_dicts:
                 self.collection_dict[metadata_dict._filename] = metadata_dict.metadata
         else:
-            self.collection_dict = collection_dict
+            super().__setattr__("collection_dict", collection_dict)
 
     def as_dict(self):
         return self.collection_dict
@@ -173,7 +210,27 @@ class MetadataCollection:
 
     def __setitem__(self, key, value):
         self.collection_dict[key] = value
-        self.dataset[key] = value
+
+    def __delitem__(self, key):
+        del self.collection_dict[key]
+
+    def __contains__(self, key):
+        return key in self.collection_dict
+
+    def __setattr__(self, name, value):
+        if name in list(self.__dict__.keys()):
+            super().__setattr__(name, value)
+        else:
+            self[name] = value
+
+    def __getattribute__(self, name: str):
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            return self[name]
+
+    def __delattr__(self, name: str):
+        del self[name]
 
     def __repr__(self):
         return repr(self.collection_dict)
@@ -225,7 +282,6 @@ class MetadataCollection:
             MetadataCollection: A collection of metadata entries that match the provided keys.
         """
         return MetadataCollection(
-            self.dataset,
             collection_dict={key: self.collection_dict[key] for key in keys},
         )
 
@@ -247,7 +303,6 @@ class MetadataCollection:
             else list(self.collection_dict.keys())[start : start + amount]
         )
         return MetadataCollection(
-            self.dataset,
             collection_dict={key: self.collection_dict[key] for key in keys},
         )
 
@@ -263,7 +318,6 @@ class MetadataCollection:
         """
         keys = random.sample(list(self.collection_dict.keys()), amount)
         return MetadataCollection(
-            self.dataset,
             collection_dict={key: self.collection_dict[key] for key in keys},
         )
 
@@ -276,8 +330,24 @@ class MetadataCollection:
         """
         self.collection_dict.update(metadata_collection.collection_dict)
 
+    def remove_items(self, keys):
+        """
+        Remove metadata entries from the collection based on the provided keys.
+
+        Parameters:
+            keys (list): A list of keys to remove from the collection.
+        """
+        for key in keys:
+            if not key in self.collection_dict:
+                print(f"Key '{key}' not found in collection.")
+            self.collection_dict.pop(key, None)
+
     def __add__(self, metadata_collection):
         self.merge(metadata_collection)
+        return self
+
+    def __sub__(self, metadata_collection):
+        self.remove_items(metadata_collection.keys())
         return self
 
     def truncate(self, amount: int):
@@ -311,10 +381,10 @@ class MetadataCollection:
 
 class DatasetWrapper:
     def __init__(self, db, table_name):
-        self.db = db
-        self.conn = db.conn
-        self.cursor = db.conn.cursor()
-        self.table_name = table_name
+        super().__setattr__("db", db)
+        super().__setattr__("conn", db.conn)
+        super().__setattr__("cursor", db.conn.cursor())
+        super().__setattr__("table_name", table_name)
 
     def __getitem__(self, _filename):
         self.cursor.execute(
@@ -349,6 +419,65 @@ class DatasetWrapper:
 
         self.cursor.execute(query, values_with_filename)
         self.db._checked_commit()
+
+    def __delitem__(self, _filename):
+        self.cursor.execute(
+            f"DELETE FROM {self.table_name} WHERE _filename=?", (_filename,)
+        )
+        self.db._checked_commit()
+
+    def __getattribute__(self, name):
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            return self[name]
+
+    def __setattr__(self, name, value):
+        if name in list(self.__dict__.keys()):
+            super().__setattr__(name, value)
+        else:
+            self[name] = value
+
+    def __delattr__(self, name):
+        del self[name]
+
+    def get_subset_by_key(self, keys):
+        """
+        Get a subset of the dataset based on the provided keys.
+
+        Parameters:
+            keys (list): A list of keys to include in the subset.
+
+        Returns:
+            MetadataCollection: A collection of metadata entries that match the provided keys.
+        """
+        return self.all().get_subset_by_key(keys)
+
+    def get_subset_by_amount(self, amount: int, start: int = 0, reverse: bool = False):
+        """
+        Get a subset of the dataset based on the provided amount and start index.
+
+        Parameters:
+            amount (int): The amount of metadata entries to include in the subset.
+            start (int, optional): The start index of the subset. Defaults to 0.
+            reverse (bool, optional): If True, items will be grabbed from the end of the collection. Defaults to False.
+
+        Returns:
+            MetadataCollection: A collection of metadata entries that match the provided amount and start index.
+        """
+        return self.all().get_subset_by_amount(amount, start, reverse)
+
+    def get_subset_by_random(self, amount: int):
+        """
+        Get a random subset of the dataset based on the provided amount.
+
+        Parameters:
+            amount (int): The amount of metadata entries to include in the subset.
+
+        Returns:
+            MetadataCollection: A collection of random metadata entries that match the provided amount.
+        """
+        return self.all().get_subset_by_random(amount)
 
     def search(self, **criteria):
         """
@@ -409,7 +538,7 @@ class DatasetWrapper:
             for row in rows
         }
 
-        return MetadataCollection(self, collection_dict=entries)
+        return MetadataCollection(collection_dict=entries)
 
     def _serialize(self, value):
         if isinstance(value, (dict, list)):
@@ -421,12 +550,6 @@ class DatasetWrapper:
             return json.loads(value)
         except (json.JSONDecodeError, TypeError):
             return value
-
-    def __delitem__(self, _filename):
-        self.cursor.execute(
-            f"DELETE FROM {self.table_name} WHERE _filename=?", (_filename,)
-        )
-        self.db._checked_commit()
 
     def __contains__(self, _filename):
         self.cursor.execute(
@@ -460,10 +583,21 @@ class DatasetWrapper:
             raise TypeError(
                 "unsupported operand type(s) for +: 'DatasetWrapper' and '{type(other)}'"
             )
-        new_dataset = self.all()
-        new_dataset.merge(other.all())
-        self.batch_insert(new_dataset)
-        return new_dataset
+        current_meta = self.all()
+        current_meta.merge(other.all())
+        self.batch_insert(current_meta)
+        return self
+
+    def __sub__(self, other):
+        if not isinstance(other, DatasetWrapper):
+            raise TypeError(
+                "unsupported operand type(s) for -: 'DatasetWrapper' and '{type(other)}'"
+            )
+        current_meta = self.all()
+        current_meta.remove_items(other.keys())
+        self.clear()
+        self.batch_insert(current_meta)
+        return self
 
     def keys(self):
         """
@@ -497,6 +631,7 @@ class DatasetWrapper:
         """
         current_columns = self._get_columns()
         if attribute_name in current_columns:
+            print(f"Attribute '{attribute_name}' already exists.")
             return
 
         self._add_column(attribute_name)
@@ -575,8 +710,16 @@ class DatasetWrapper:
             dataset_entries (dict|MetadataCollection): A dictionary where the keys are the filenames and the values are dictionaries of the metadata to insert.
 
         """
-        if not dataset_entries:
+        if not list(dataset_entries.keys()):
             return
+
+        dataset_entries_serialized = {
+            filename: {
+                key: self._serialize(value) if value is not None else None
+                for key, value in metadata.items()
+            }
+            for filename, metadata in dataset_entries.items()
+        }
 
         # Extract keys and ensure we have the same structure for all entries
         first_key = next(iter(dataset_entries))
@@ -590,7 +733,7 @@ class DatasetWrapper:
         # Convert dataset_entries to list of tuples
         values = [
             (filename, *metadata.values())
-            for filename, metadata in dataset_entries.items()
+            for filename, metadata in dataset_entries_serialized.items()
         ]
 
         self.cursor.executemany(query, values)
@@ -604,7 +747,6 @@ class DatasetWrapper:
         self.cursor.execute(f"SELECT * FROM {self.table_name}")
         rows = self.cursor.fetchall()
         return MetadataCollection(
-            self,
             collection_dict={
                 row["_filename"]: {
                     key: (self._deserialize(row[key]) if row[key] is not None else None)
@@ -634,7 +776,6 @@ class DatasetWrapper:
         self.cursor.execute(f"SELECT * FROM {self.table_name}")
         rows = self.cursor.fetchall()
         return MetadataCollection(
-            self,
             collection_dict={
                 row["_filename"]: {
                     key: (self._deserialize(row[key]) if row[key] is not None else None)
