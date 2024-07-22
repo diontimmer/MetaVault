@@ -12,6 +12,10 @@ Install using pip:
 pip install metavault
 ```
 
+## Documentation
+
+Extended documentation can be found [here](https://diontimmer.github.io/MetaVault/MetaVault/metavault.html).
+
 ## Usage
 
 ```python
