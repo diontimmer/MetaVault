@@ -2,8 +2,8 @@ from setuptools import setup
 
 setup(
     name="MetaVault",
-    version="0.1.1",
-    download_url="https://github.com/diontimmer/MetaVault/archive/refs/tags/v_0.1.1.tar.gz",
+    version="0.2",
+    download_url="https://github.com/diontimmer/MetaVault/archive/refs/tags/v_0.2.tar.gz",
     license="MIT",
     author="Dion Timmer",
     author_email="diontimmer@live.nl",
