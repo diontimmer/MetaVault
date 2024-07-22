@@ -6,6 +6,7 @@ import sqlite3
 import json
 import csv
 import os
+from typing import ItemsView, Optional
 import jsonlines
 
 
@@ -16,13 +17,15 @@ class MetaVaultDatabase:
 
     Make sure to enable manual_commit and db.commit() at the end if you are trying to write alot of data iteratively to the database,
     this will reduce the number of commits and increase the speed of writing data to the database.
-
-    Parameters:
-        db_path (str): The path to the sqlite3 database file.
-        manual_commit (bool, optional): If True, the commit method must be called manually to commit changes to the database. Defaults to False.
     """
 
-    def __init__(self, db_path, manual_commit=False):
+    def __init__(self, db_path: str, manual_commit: bool = False):
+        """
+        Initialize the MetaVaultDatabase with the provided database path.
+        - **Parameters**:
+            - *db_path (str)*: The path to the sqlite3 database file.
+            - *manual_commit (bool, optional)*: If True, the commit method must be called manually to commit changes to the database. Defaults to False.
+        """
         super().__setattr__("db_path", db_path)
         super().__setattr__("manual_commit", manual_commit)
         super().__setattr__("conn", sqlite3.connect(db_path, timeout=5000))
@@ -30,36 +33,34 @@ class MetaVaultDatabase:
         super().__setattr__("cursor", self.conn.cursor())
 
     @property
-    def datasets(self):
+    def datasets(self) -> list[str]:
         """
         Return a list of the names of the datasets in the database.
         """
         self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         return [row["name"] for row in self.cursor.fetchall()]
 
-    def begin_transaction(self):
+    def begin_transaction(self) -> None:
         """
         Begin a new transaction 'restore point' for extra risky operations that might need rolling back.
-
-        Raises:
-            NoManualCommitException: If manual_commit is not enabled.
+        - **Raises**:
+            - *NoManualCommitException*: If manual_commit is not enabled.
         """
         if not self.manual_commit:
             raise NoManualCommitException("Manual commit is not enabled.")
         self.conn.execute("BEGIN TRANSACTION")
 
-    def rollback_transaction(self):
+    def rollback_transaction(self) -> None:
         """
         Roll back the current transaction in case an error occurred.
-
-        Raises:
-            NoManualCommitException: If manual_commit is not enabled.
+        - **Raises**:
+            - *NoManualCommitException*: If manual_commit is not enabled.
         """
         if not self.manual_commit:
             raise NoManualCommitException("Manual commit is not enabled.")
         self.conn.execute("ROLLBACK TRANSACTION")
 
-    def commit(self):
+    def commit(self) -> None:
         """
         Commit the current transaction.
         """
@@ -110,13 +111,14 @@ class MetaVaultDatabase:
     def __delattr__(self, name: str):
         del self[name]
 
-    def create_dataset(self, dataset_name: str, attributes: str = None):
+    def create_dataset(
+        self, dataset_name: str, attributes: Optional[list[str]] = None
+    ) -> "DatasetWrapper":
         """
         Create a new dataset in the database.
-
-        Parameters:
-            dataset_name (str): The name of the dataset.
-            attributes (list of str, optional): The names of the attributes to add to the dataset. Defaults to None.
+        - **Parameters**:
+            - *dataset_name (str)*: The name of the dataset.
+            - *attributes (list of str, optional)*: The names of the attributes to add to the dataset. Defaults to None.
         """
         if attributes:
             columns_definition = ", ".join([f"{col} TEXT" for col in attributes])
@@ -127,30 +129,28 @@ class MetaVaultDatabase:
         self._checked_commit()
         return DatasetWrapper(self, dataset_name)
 
-    def remove_dataset(self, dataset_name: str):
+    def remove_dataset(self, dataset_name: str) -> None:
         """
         Remove a dataset from the database.
-
-        Parameters:
-            dataset_name (str): The name of the dataset.
+        - **Parameters**:
+            - *dataset_name (str)*: The name of the dataset.
 
         """
         self.cursor.execute(f"DROP TABLE IF EXISTS {dataset_name}")
         self._checked_commit()
 
-    def get_dataset(self, dataset_name: str):
+    def get_dataset(self, dataset_name: str) -> "DatasetWrapper":
         """
         Get a dataset from the database.
-
-        Parameters:
-            dataset_name (str): The name of the dataset.
-
-        Returns:
-            DatasetWrapper: A wrapper around the dataset.
+        - **Parameters**:
+            - *dataset_name (str)*: The name of the dataset.
         """
         return DatasetWrapper(self, dataset_name)
 
-    def close(self):
+    def close(self) -> None:
+        """
+        Close the connection to the database.
+        """
         self.conn.close()
 
     def __enter__(self):
@@ -181,7 +181,18 @@ class MetadataDict:
 
 
 class MetadataCollection:
+    """
+    A collection of metadata entries.
+    This collection represents full or partial metadata entries from a dataset.
+    """
+
     def __init__(self, collection_dict=None, metadata_dicts=None):
+        """
+        Initialize with either a dictionary of metadata entries or a list of MetadataDict objects.
+        - **Parameters**:
+            - *collection_dict (dict, optional)*: A dictionary of metadata entries. Defaults to None.
+            - *metadata_dicts (list of MetadataDict, optional)*: A list of MetadataDict objects. Defaults to None.
+        """
         if collection_dict is None:
             super().__setattr__("collection_dict", {})
             if metadata_dicts is None:
@@ -193,7 +204,10 @@ class MetadataCollection:
         else:
             super().__setattr__("collection_dict", collection_dict)
 
-    def as_dict(self):
+    def as_dict(self) -> dict:
+        """
+        Return the collection as a dictionary.
+        """
         return self.collection_dict
 
     def __iter__(self):
@@ -238,64 +252,50 @@ class MetadataCollection:
     def __bool__(self):
         return len(self.collection_dict) == 0
 
-    def items(self):
+    def items(self) -> ItemsView:
+        """
+        Returns a collection of metadata entries in the dataset.
+        Useful for iterating over the dataset by filename and metadata.
+        """
         return self.collection_dict.items()
 
-    def keys(self):
+    def keys(self) -> list[str]:
+        """
+        Returns a list of all the filenames in the dataset.
+        """
         return self.collection_dict.keys()
 
-    def values(self):
+    def files(self) -> list[str]:
+        """
+        Returns a list of all the filenames in the dataset.
+        """
+        return self.keys()
+
+    def values(self) -> list[dict]:
+        """
+        Returns a collection of metadata entries in the dataset without the filenames.
+        """
         return self.collection_dict.values()
 
-    def export_data(self, file_path: str, file_column_name: str = "file_name"):
+    def get_subset_by_key(self, keys) -> "MetadataCollection":
         """
-        Export the dataset to a file in jsonl, json or csv format.
-
-        Parameters:
-            file_path (str): The path to the file to export the dataset to, picking the file type based on the extension.
-
-        Raises:
-            ValueError: If the file type is not one of 'jsonl', 'json' or 'csv'.
-        """
-        file_type = os.path.splitext(file_path)[1][1:]
-        if file_type not in ["jsonl", "json", "csv"]:
-            raise ValueError("file type must be one of 'jsonl', 'json', 'csv'")
-
-        if file_type == "jsonl":
-            self._export_jsonl(file_path, file_column_name)
-        elif file_type == "json":
-            self._export_json(file_path)
-        elif file_type == "csv":
-            self._export_csv(file_path, file_column_name)
-
-    def export(self, file_path: str, file_column_name: str = "file_name"):
-        self.export_data(file_path, file_column_name)
-
-    def get_subset_by_key(self, keys):
-        """
-        Get a subset of the metadata collection based on the provided keys.
-
-        Parameters:
-            keys (list): A list of keys to include in the subset.
-
-        Returns:
-            MetadataCollection: A collection of metadata entries that match the provided keys.
+        Get a subset of the dataset based on the provided keys.
+        - **Parameters**:
+            - *keys (list)*: A list of keys to include in the subset.
         """
         return MetadataCollection(
             collection_dict={key: self.collection_dict[key] for key in keys},
         )
 
-    def get_subset_by_amount(self, amount: int, start: int = 0, reverse: bool = False):
+    def get_subset_by_amount(
+        self, amount: int, start: int = 0, reverse: bool = False
+    ) -> "MetadataCollection":
         """
-        Get a subset of the metadata collection based on the provided amount and start index.
-
-        Parameters:
-            amount (int): The amount of metadata entries to include in the subset.
-            start (int, optional): The start index of the subset. Defaults to 0.
-            reverse (bool, optional): If True, items will be grabbed from the end of the collection. Defaults to False.
-
-        Returns:
-            MetadataCollection: A collection of metadata entries that match the provided amount and start index.
+        Get a subset of the dataset based on the provided amount and start index.
+        - **Parameters**:
+            - *amount (int)*: The amount of metadata entries to include in the subset.
+            - *start (int, optional)*: The start index of the subset. Defaults to 0.
+            - *reverse (bool, optional)*: If True, items will be grabbed from the end of the collection. Defaults to False.
         """
         keys = (
             list(self.collection_dict.keys())[::-1][start : start + amount][::-1]
@@ -306,15 +306,11 @@ class MetadataCollection:
             collection_dict={key: self.collection_dict[key] for key in keys},
         )
 
-    def get_subset_by_random(self, amount: int):
+    def get_subset_by_random(self, amount: int) -> "MetadataCollection":
         """
-        Get a random subset of the metadata collection based on the provided amount.
-
-        Parameters:
-            amount (int): The amount of metadata entries to include in the subset.
-
-        Returns:
-            MetadataCollection: A collection of random metadata entries that match the provided amount.
+        Get a random subset of the dataset based on the provided amount.
+        - **Parameters**:
+            - *amount (int)*: The amount of metadata entries to include in the subset.
         """
         keys = random.sample(list(self.collection_dict.keys()), amount)
         return MetadataCollection(
@@ -324,18 +320,16 @@ class MetadataCollection:
     def merge(self, metadata_collection):
         """
         Merge another metadata collection with this one.
-
-        Parameters:
-            metadata_collection (MetadataCollection): The metadata collection to merge with this one.
+        - **Parameters**:
+            - *metadata_collection (MetadataCollection)*: The metadata collection to merge with this one.
         """
         self.collection_dict.update(metadata_collection.collection_dict)
 
     def remove_items(self, keys):
         """
         Remove metadata entries from the collection based on the provided keys.
-
-        Parameters:
-            keys (list): A list of keys to remove from the collection.
+        - **Parameters**:
+            - *keys (list)*: A list of keys to remove from the collection.
         """
         for key in keys:
             if not key in self.collection_dict:
@@ -353,11 +347,39 @@ class MetadataCollection:
     def truncate(self, amount: int):
         """
         Truncate the metadata collection to the provided amount.
-
-        Parameters:
-            amount (int): The amount of metadata entries to keep in the collection.
+        - **Parameters**:
+            - *amount (int)*: The amount of metadata entries to keep in the collection.
         """
         return self.get_subset_by_amount(amount)
+
+    def export_data(self, file_path: str, file_column_name: str = "file_name") -> None:
+        """
+        Export the dataset to a file in jsonl, json or csv format.
+        - **Parameters**:
+            - *file_path (str)*: The path to the file to export the dataset to, picking the file type based on the extension.
+        - **Raises**:
+            - *ValueError*: If the file type is not one of 'jsonl', 'json' or 'csv'.
+        """
+        file_type = os.path.splitext(file_path)[1][1:]
+        if file_type not in ["jsonl", "json", "csv"]:
+            raise ValueError("file type must be one of 'jsonl', 'json', 'csv'")
+
+        if file_type == "jsonl":
+            self._export_jsonl(file_path, file_column_name)
+        elif file_type == "json":
+            self._export_json(file_path)
+        elif file_type == "csv":
+            self._export_csv(file_path, file_column_name)
+
+    def export(self, file_path: str, file_column_name: str = "file_name") -> None:
+        """
+        Export the dataset to a file in jsonl, json or csv format.
+        - **Parameters**:
+            - *file_path (str)*: The path to the file to export the dataset to, picking the file type based on the extension.
+        - **Raises**:
+            - *ValueError*: If the file type is not one of 'jsonl', 'json' or 'csv'.
+        """
+        self.export_data(file_path, file_column_name)
 
     def _export_jsonl(self, file_path, file_column_name):
         entries = []
@@ -378,9 +400,57 @@ class MetadataCollection:
             for _filename, metadata in self.items():
                 writer.writerow([_filename] + list(metadata.values()))
 
+    def import_data(self, file_path: str, file_column_name: str = "file_name") -> None:
+        """
+        Import data from a file in jsonl, json or csv format.
+        - **Parameters**:
+            - *file_path (str)*: The path to the file to import the data from.
+            - *file_column_name (str)*: The name of the column in the file that contains the filenames.
+        """
+        file_type = os.path.splitext(file_path)[1][1:]
+        if file_type not in ["jsonl", "json", "csv"]:
+            raise ValueError("file type must be one of 'jsonl', 'json', 'csv'")
+
+        if file_type == "jsonl":
+            self._import_jsonl(file_path, file_column_name)
+        elif file_type == "json":
+            self._import_json(file_path)
+        elif file_type == "csv":
+            self._import_csv(file_path, file_column_name)
+
+    def _import_jsonl(self, file_path, file_column_name):
+        with jsonlines.open(file_path) as file:
+            for line in file:
+                self[line[file_column_name]] = line
+
+    def _import_json(self, file_path):
+        with open(file_path) as file:
+            data = json.load(file)
+            for key, value in data.items():
+                self[key] = value
+
+    def _import_csv(self, file_path, file_column_name):
+        with open(file_path) as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                self[row[file_column_name]] = row
+
 
 class DatasetWrapper:
+    """
+    A wrapper around a dataset in the MetaVaultDatabase.
+    This is essentially a dictionary-like object that allows for easy manipulation of metadata entries in the dataset.
+    Its data can be retrieved as a MetadataCollection object, which can be exported to a file in jsonl, json or csv format.
+    Subsets can also be retrieved based on keys, amount, or randomly from these collection objects.
+    """
+
     def __init__(self, db, table_name):
+        """
+        Initialize the DatasetWrapper with the provided database and table name.
+        - **Parameters**:
+            - *db (MetaVaultDatabase)*: The MetaVaultDatabase object that the dataset belongs to.
+            - *table_name (str)*: The name of the dataset table in the database.
+        """
         super().__setattr__("db", db)
         super().__setattr__("conn", db.conn)
         super().__setattr__("cursor", db.conn.cursor())
@@ -441,69 +511,57 @@ class DatasetWrapper:
     def __delattr__(self, name):
         del self[name]
 
-    def get_subset_by_key(self, keys):
+    def get_subset_by_key(self, keys) -> "MetadataCollection":
         """
         Get a subset of the dataset based on the provided keys.
-
-        Parameters:
-            keys (list): A list of keys to include in the subset.
-
-        Returns:
-            MetadataCollection: A collection of metadata entries that match the provided keys.
+        - **Parameters**:
+            - *keys (list)*: A list of keys to include in the subset.
         """
         return self.all().get_subset_by_key(keys)
 
-    def get_subset_by_amount(self, amount: int, start: int = 0, reverse: bool = False):
+    def get_subset_by_amount(
+        self, amount: int, start: int = 0, reverse: bool = False
+    ) -> "MetadataCollection":
         """
         Get a subset of the dataset based on the provided amount and start index.
-
-        Parameters:
-            amount (int): The amount of metadata entries to include in the subset.
-            start (int, optional): The start index of the subset. Defaults to 0.
-            reverse (bool, optional): If True, items will be grabbed from the end of the collection. Defaults to False.
-
-        Returns:
-            MetadataCollection: A collection of metadata entries that match the provided amount and start index.
+        - **Parameters**:
+            - *amount (int)*: The amount of metadata entries to include in the subset.
+            - *start (int, optional)*: The start index of the subset. Defaults to 0.
+            - *reverse (bool, optional)*: If True, items will be grabbed from the end of the collection. Defaults to False.
         """
         return self.all().get_subset_by_amount(amount, start, reverse)
 
-    def get_subset_by_random(self, amount: int):
+    def get_subset_by_random(self, amount: int) -> "MetadataCollection":
         """
         Get a random subset of the dataset based on the provided amount.
-
-        Parameters:
-            amount (int): The amount of metadata entries to include in the subset.
-
-        Returns:
-            MetadataCollection: A collection of random metadata entries that match the provided amount.
+        - **Parameters**:
+            - *amount (int)*: The amount of metadata entries to include in the subset.
         """
         return self.all().get_subset_by_random(amount)
 
-    def search(self, **criteria):
+    def search(self, **criteria) -> "MetadataCollection":
         """
         Search the dataset based on given criteria.
+        The criteria should be provided as keyword arguments, where the key is the column name
+        and the value is a dictionary specifying the type of search.
 
-        The criteria should be provided as keyword arguments, where the key is the column name and the value is a dictionary specifying the type of search.
+        - **Supported criteria**:
+            - *exact*: Exact match. Example: name={"exact": "John Doe"}
+            - *like*: Partial match using SQL LIKE. Example: name={"like": "John"}
+            - *range*: Range query for numerical values. Example: age={"range": [25, 30]}
+            - *exists*: Check if the attribute exists and is not null. Example: email={"exists": True}
 
-        Supported criteria:
-            - exact: Exact match. Example: name={"exact": "John Doe"}
-            - like: Partial match using SQL LIKE. Example: name={"like": "John"}
-            - range: Range query for numerical values. Example: age={"range": [25, 30]}
-            - exists: Check if the attribute exists and is not null. Example: email={"exists": True}
+        - **Parameters**:
+            - **criteria: Arbitrary keyword arguments representing search criteria.
 
-        Parameters:
-            **criteria: Arbitrary keyword arguments representing search criteria.
-
-        Returns:
-            MetadataCollection: A collection of metadata entries that match the search criteria.
-            This can be exported to a file using the export method.
-
-        Example usage:
+        - **Example usage**:
+        ```python
             results = dataset.search(
                 name={"like": "John"},
                 age={"range": [25, 30]},
                 email={"exists": True}
             )
+        ```
         """
         query = f"SELECT * FROM {self.table_name} WHERE "
         conditions = []
@@ -599,18 +657,51 @@ class DatasetWrapper:
         self.batch_insert(current_meta)
         return self
 
-    def keys(self):
+    def items(self) -> ItemsView:
+        """
+        Returns a collection of metadata entries in the dataset.
+        Useful for iterating over the dataset by filename and metadata.
+        """
+        self.cursor.execute(f"SELECT * FROM {self.table_name}")
+        rows = self.cursor.fetchall()
+        return MetadataCollection(
+            collection_dict={
+                row["_filename"]: {
+                    key: (self._deserialize(row[key]) if row[key] is not None else None)
+                    for key in row.keys()
+                    if key != "_filename"
+                }
+                for row in rows
+            },
+        ).items()
+
+    def keys(self) -> list[str]:
         """
         Returns a list of all the filenames in the dataset.
         """
         self.cursor.execute(f"SELECT _filename FROM {self.table_name}")
         return [row["_filename"] for row in self.cursor.fetchall()]
 
-    def files(self):
+    def files(self) -> list[str]:
         """
         Returns a list of all the filenames in the dataset.
         """
         return self.keys()
+
+    def values(self) -> list[dict]:
+        """
+        Returns a collection of metadata entries in the dataset without the filenames.
+        """
+        self.cursor.execute(f"SELECT * FROM {self.table_name}")
+        rows = self.cursor.fetchall()
+        return [
+            {
+                key: (self._deserialize(row[key]) if row[key] is not None else None)
+                for key in row.keys()
+                if key != "_filename"
+            }
+            for row in rows
+        ]
 
     def _get_columns(self):
         self.cursor.execute(f"PRAGMA table_info({self.table_name})")
@@ -622,12 +713,11 @@ class DatasetWrapper:
         )
         self.db._checked_commit()
 
-    def add_attribute(self, attribute_name: str):
+    def add_attribute(self, attribute_name: str) -> None:
         """
         Add an attribute to the dataset.
-
-        Parameters:
-            attribute_name (str): The name of the attribute to add.
+        - **Parameters**:
+            - *attribute_name (str)*: The name of the attribute to add.
         """
         current_columns = self._get_columns()
         if attribute_name in current_columns:
@@ -636,16 +726,14 @@ class DatasetWrapper:
 
         self._add_column(attribute_name)
 
-    def remove_attribute(self, attribute_name: str):
+    def remove_attribute(self, attribute_name: str) -> None:
         """
         Remove an attribute from the dataset.
         Warning: This operation is not reversible.
-
-        Parameters:
-            attribute_name (str): The name of the attribute to remove.
-
-        Raises:
-            KeyError: If the attribute does not exist.
+        - **Parameters**:
+            - *attribute_name (str)*: The name of the attribute to remove.
+        - **Raises**:
+            - *KeyError*: If the attribute does not exist.
         """
 
         current_columns = self._get_columns()
@@ -671,17 +759,17 @@ class DatasetWrapper:
         self.cursor.execute(f"ALTER TABLE temp_table RENAME TO {self.table_name}")
         self.db._checked_commit()
 
-    def replace_in_attribute(self, attribute_name: str, old_value: str, new_value: str):
+    def replace_in_attribute(
+        self, attribute_name: str, old_value: str, new_value: str
+    ) -> None:
         """
         For all entries in the dataset, replace a value in a specific attribute.
-
-        Parameters:
-            attribute_name (str): The name of the attribute to replace the value in.
-            old_value (str): The value to replace.
-            new_value (str): The new value.
-
-        Raises:
-            KeyError: If the attribute does not exist.
+        - **Parameters**:
+            - *attribute_name (str)*: The name of the attribute to replace the value in.
+            - *old_value (str)*: The value to replace.
+            - *new_value (str)*: The new value.
+        - **Raises**:
+            - *KeyError*: If the attribute does not exist.
         """
         current_columns = self._get_columns()
 
@@ -702,13 +790,11 @@ class DatasetWrapper:
 
         self.db._checked_commit()
 
-    def batch_insert(self, dataset_entries: dict):
+    def batch_insert(self, dataset_entries: dict) -> None:
         """
         Insert multiple entries into the dataset.
-
-        Parameters:
-            dataset_entries (dict|MetadataCollection): A dictionary where the keys are the filenames and the values are dictionaries of the metadata to insert.
-
+        - **Parameters**:
+            - *dataset_entries (dict | MetadataCollection)*: A dictionary where the keys are the filenames and the values are dictionaries of the metadata to insert.
         """
         if not list(dataset_entries.keys()):
             return
@@ -739,40 +825,7 @@ class DatasetWrapper:
         self.cursor.executemany(query, values)
         self.db._checked_commit()
 
-    def items(self):
-        """
-        Returns a collection of metadata entries in the dataset.
-        Useful for iterating over the dataset by filename and metadata.
-        """
-        self.cursor.execute(f"SELECT * FROM {self.table_name}")
-        rows = self.cursor.fetchall()
-        return MetadataCollection(
-            collection_dict={
-                row["_filename"]: {
-                    key: (self._deserialize(row[key]) if row[key] is not None else None)
-                    for key in row.keys()
-                    if key != "_filename"
-                }
-                for row in rows
-            },
-        ).items()
-
-    def values(self):
-        """
-        Returns a collection of metadata entries in the dataset without the filenames.
-        """
-        self.cursor.execute(f"SELECT * FROM {self.table_name}")
-        rows = self.cursor.fetchall()
-        return [
-            {
-                key: (self._deserialize(row[key]) if row[key] is not None else None)
-                for key in row.keys()
-                if key != "_filename"
-            }
-            for row in rows
-        ]
-
-    def all(self):
+    def all(self) -> "MetadataCollection":
         self.cursor.execute(f"SELECT * FROM {self.table_name}")
         rows = self.cursor.fetchall()
         return MetadataCollection(
@@ -786,43 +839,41 @@ class DatasetWrapper:
             },
         )
 
-    def clear(self):
+    def clear(self) -> None:
+        """
+        Clear all entries from the dataset.
+        """
         self.cursor.execute(f"DELETE FROM {self.table_name}")
         self.db._checked_commit()
 
-    def export_data(self, file_path: str, file_column_name: str = "file_name"):
+    def export_data(self, file_path: str, file_column_name: str = "file_name") -> None:
         """
         Export the dataset to a file in jsonl, json or csv format.
-
-        Parameters:
-            file_path (str): The path to the file to export the dataset to, picking the file type based on the extension.
-
-        Raises:
-            ValueError: If the file type is not one of 'jsonl', 'json' or 'csv'.
+        - **Parameters**:
+            - *file_path (str)*: The path to the file to export the dataset to, picking the file type based on the extension.
+        - **Raises**:
+            - *ValueError*: If the file type is not one of 'jsonl', 'json' or 'csv'.
         """
         self.all().export_data(file_path, file_column_name)
 
-    def export(self, file_path: str, file_column_name: str = "file_name"):
+    def export(self, file_path: str, file_column_name: str = "file_name") -> None:
         """
         Export the dataset to a file in jsonl, json or csv format.
-
-        Parameters:
-            file_path (str): The path to the file to export the dataset to, picking the file type based on the extension.
-
-        Raises:
-            ValueError: If the file type is not one of 'jsonl', 'json' or 'csv'.
+        - **Parameters**:
+            - *file_path (str)*: The path to the file to export the dataset to, picking the file type based on the extension.
+        - **Raises**:
+            - *ValueError*: If the file type is not one of 'jsonl', 'json' or 'csv'.
         """
         self.export_data(file_path, file_column_name)
 
     def import_data(
         self, file_path: str, file_column_name: str = "file_name", append: bool = True
-    ):
+    ) -> None:
         """
         Import data from a file in jsonl, json or csv format.
-
-        Parameters:
-            file_path (str): The path to the file to import the data from.
-            file_column_name (str): The name of the column in the file that contains the filenames.
+        - **Parameters**:
+            - *file_path (str)*: The path to the file to import the data from.
+            - *file_column_name (str)*: The name of the column in the file that contains the filenames.
         """
         if not append:
             self.clear()
