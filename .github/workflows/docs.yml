@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - run: python -o docs/
+      - run: python pdoc  metavault.py -t /style -o docs/ --no-include-undocumented
 
       - uses: actions/upload-pages-artifact@v3
         with:
